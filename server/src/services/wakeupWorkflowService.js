@@ -266,7 +266,7 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
   const imagePrompt = buildImagePrompt(selected);
   const [narrative, image] = await Promise.all([
     generateNarrativePack(selected),
-    generateImage({ prompt: imagePrompt, size: '512x512' })
+    generateImage({ prompt: imagePrompt, size: 'auto' })
   ]);
   const drive = await uploadImageToDrive({
     buffer: image,
