@@ -196,27 +196,7 @@ function safeJsonParse(text) {
   }
 }
 
-async function generateGreeting({ city, country, language }) {
-  const response = await generateText(
-    [
-      'Return strict JSON only. No markdown.',
-      `City: ${city}`,
-      `Country: ${country}`,
-      `Primary language: ${language}`,
-      'Output schema: {"greeting":"..."}',
-      'Generate one natural local-language phrase meaning good morning.'
-    ].join('\n')
-  );
-
-  const parsed = safeJsonParse(response);
-  if (parsed?.greeting && typeof parsed.greeting === 'string') {
-    return parsed.greeting.trim();
-  }
-
-  return 'Good morning';
-}
-
-async function generateStories({ city, country, city_zh, country_zh }) {
+async function generateNarrativePack({ city, country, city_zh, country_zh, language }) {
   const response = await generateText(
     [
       'Return strict JSON only. No markdown.',
@@ -224,7 +204,9 @@ async function generateStories({ city, country, city_zh, country_zh }) {
       `Country: ${country}`,
       `City zh-TW: ${city_zh}`,
       `Country zh-TW: ${country_zh}`,
-      'Output schema: {"story":"...","story_zh":"..."}',
+      `Primary language: ${language}`,
+      'Output schema: {"greeting":"...","story":"...","story_zh":"..."}',
+      'greeting requirements: one short natural phrase meaning good morning in the local language.',
       'story requirements: English, <=150 words, start with "Today you wake up in {city}, {country}."',
       'story_zh requirements: Traditional Chinese, <=150 characters, start with "今天的你甦醒在{country_zh}的{city_zh}，"',
       'Both should include cultural routine, geography, and one less-known historical detail.'
@@ -232,14 +214,16 @@ async function generateStories({ city, country, city_zh, country_zh }) {
   );
 
   const parsed = safeJsonParse(response);
-  if (parsed?.story && parsed?.story_zh) {
+  if (parsed?.greeting && parsed?.story && parsed?.story_zh) {
     return {
+      greeting: String(parsed.greeting).trim(),
       story: String(parsed.story).trim(),
       story_zh: String(parsed.story_zh).trim()
     };
   }
 
   return {
+    greeting: 'Good morning',
     story: `Today you wake up in ${city}, ${country}. Dawn slides over the streets as local breakfast aromas drift from corner cafes. You follow a narrow lane toward a hill viewpoint and hear snippets of old stories about how this city once rebuilt itself after a forgotten fire. The morning feels like a map opening in your hands, and each step gives you one more clue about how people here learned to live with their land and seasons.`,
     story_zh: `今天的你甦醒在${country_zh}的${city_zh}，清晨的光沿著街道慢慢展開，你聞到在地早餐香氣，邊走邊聽見一段少有人提起的城市往事。地形與氣候塑造了居民的生活節奏，你像在翻開一張冒險地圖。`
   };
@@ -279,11 +263,11 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
   const cityLocal = toParts(now, selected.timezone);
   const localTime = `${cityLocal.year}-${cityLocal.month}-${cityLocal.day} ${cityLocal.hour}:${cityLocal.minute}:${cityLocal.second}`;
 
-  const greeting = await generateGreeting(selected);
-  const { story, story_zh } = await generateStories(selected);
-
   const imagePrompt = buildImagePrompt(selected);
-  const image = await generateImage({ prompt: imagePrompt, size: '1024x1024' });
+  const [narrative, image] = await Promise.all([
+    generateNarrativePack(selected),
+    generateImage({ prompt: imagePrompt, size: '512x512' })
+  ]);
   const drive = await uploadImageToDrive({
     buffer: image,
     fileName: `wake-up-${selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
@@ -302,9 +286,9 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
     localTime,
     latitude: selected.latitude,
     longtitude: selected.longtitude,
-    greeting,
-    story,
-    story_zh,
+    greeting: narrative.greeting,
+    story: narrative.story,
+    story_zh: narrative.story_zh,
     imageUrl: drive.directUrl
   };
 

@@ -14,6 +14,8 @@ export default function App() {
   const [skills, setSkills] = useState([]);
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressLabel, setProgressLabel] = useState('Idle');
   const [status, setStatus] = useState('Ready');
   const [result, setResult] = useState(null);
 
@@ -33,11 +35,17 @@ export default function App() {
     }
 
     setLoading(true);
+    setProgress(6);
+    setProgressLabel('Preparing wake-up workflow...');
     setStatus('Running wake-up workflow...');
 
     const time = localTimeSnapshot();
+    const ticker = window.setInterval(() => {
+      setProgress((prev) => Math.min(prev + Math.max(1, (95 - prev) * 0.08), 95));
+    }, 350);
 
     try {
+      setProgressLabel('Generating story and image...');
       const res = await fetch(`${API_BASE}/api/wakeup/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,14 +60,21 @@ export default function App() {
 
       if (!res.ok) {
         setStatus(`Error: ${data.error || 'Unknown error'}`);
+        setProgressLabel('Generation failed');
+        window.clearInterval(ticker);
         setLoading(false);
         return;
       }
 
       setResult(data.data);
+      setProgress(100);
+      setProgressLabel('Done');
       setStatus('Completed and synced to Notion.');
+      window.clearInterval(ticker);
     } catch (error) {
       setStatus(`Error: ${error.message}`);
+      setProgressLabel('Generation failed');
+      window.clearInterval(ticker);
     } finally {
       setLoading(false);
     }
@@ -87,6 +102,17 @@ export default function App() {
         <button disabled={loading} onClick={handleWakeUp}>
           {loading ? 'Waking Up...' : 'Wake Up Now'}
         </button>
+        {(loading || progress > 0) && (
+          <div className="progressWrap" aria-live="polite">
+            <div className="progressMeta">
+              <span>{progressLabel}</span>
+              <span>{Math.round(progress)}%</span>
+            </div>
+            <div className="progressTrack">
+              <div className="progressFill" style={{ width: `${Math.max(0, Math.min(progress, 100))}%` }} />
+            </div>
+          </div>
+        )}
         <p className="status">{status}</p>
       </section>
 
