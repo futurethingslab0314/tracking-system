@@ -274,12 +274,12 @@ function getCachedBreakfastImage(selected) {
     return null;
   }
 
-  return cached.drive;
+  return cached;
 }
 
-function setCachedBreakfastImage(selected, drive) {
+function setCachedBreakfastImage(selected, data) {
   const key = buildImageCacheKey(selected);
-  BREAKFAST_IMAGE_CACHE.set(key, { drive, createdAt: Date.now() });
+  BREAKFAST_IMAGE_CACHE.set(key, { ...data, createdAt: Date.now() });
 }
 
 export function createWakeupDraft({ userName, clientTimeZone, clientIsoTime }) {
@@ -331,15 +331,16 @@ export async function completeWakeupDraft({ draft, onProgress }) {
   report({ progress: 40, message: 'Generating story and breakfast image...', storyReady: false, imageReady: false });
 
   const storyPromise = generateStories(draft.selected);
-  const cachedDrive = getCachedBreakfastImage(draft.selected);
-  const imagePromise = cachedDrive
+  const cached = getCachedBreakfastImage(draft.selected);
+  const imagePromise = cached?.drive
     ? null
     : generateImage({ prompt: buildImagePrompt(draft.selected), size: 'auto' });
 
   const stories = await storyPromise;
   report({ progress: 62, message: 'Story generated. Preparing image...', storyReady: true, imageReady: false, stories });
 
-  let drive = cachedDrive;
+  let drive = cached?.drive || null;
+  let recipes = cached?.recipes || null;
   if (drive) {
     report({
       progress: 80,
@@ -355,20 +356,30 @@ export async function completeWakeupDraft({ draft, onProgress }) {
       fileName: `wake-up-${draft.selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
       mimeType: 'image/png'
     });
-    setCachedBreakfastImage(draft.selected, drive);
+    recipes = await generateRecipeFromImage({
+      imageBase64: image.toString('base64'),
+      city: draft.selected.city,
+      country: draft.selected.country,
+      city_zh: draft.selected.city_zh,
+      country_zh: draft.selected.country_zh
+    });
+    setCachedBreakfastImage(draft.selected, { drive, recipes });
     report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
   }
-  if (cachedDrive) {
+  if (cached?.drive) {
     report({ progress: 84, message: 'Using cached image. Writing to Notion...', storyReady: true, imageReady: true, drive });
   }
 
-  const recipes = await generateRecipeFromImage({
-    imageUrl: drive.directUrl,
-    city: draft.selected.city,
-    country: draft.selected.country,
-    city_zh: draft.selected.city_zh,
-    country_zh: draft.selected.country_zh
-  });
+  if (!recipes) {
+    recipes = await generateRecipeFromImage({
+      imageUrl: drive.directUrl,
+      city: draft.selected.city,
+      country: draft.selected.country,
+      city_zh: draft.selected.city_zh,
+      country_zh: draft.selected.country_zh
+    });
+    setCachedBreakfastImage(draft.selected, { drive, recipes });
+  }
   report({
     progress: 92,
     message: 'Recipe generated. Writing to Notion...',

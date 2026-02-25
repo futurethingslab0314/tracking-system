@@ -51,8 +51,22 @@ function asStringArray(value) {
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
-export async function generateRecipeFromImage({ imageUrl, city, country, city_zh, country_zh }) {
+export async function generateRecipeFromImage({
+  imageUrl,
+  imageBase64,
+  city,
+  country,
+  city_zh,
+  country_zh
+}) {
   const client = getClient();
+  const imagePayload = imageBase64
+    ? `data:image/png;base64,${imageBase64}`
+    : imageUrl;
+
+  if (!imagePayload) {
+    throw new Error('generateRecipeFromImage requires imageUrl or imageBase64');
+  }
 
   // Stage 1: visual detection first (what is really visible vs inferred).
   const detect = await client.responses.create({
@@ -74,17 +88,49 @@ export async function generateRecipeFromImage({ imageUrl, city, country, city_zh
           },
           {
             type: 'input_image',
-            image_url: imageUrl
+            image_url: imagePayload
           }
         ]
       }
     ]
   });
 
-  const detectParsed = safeJsonParse(detect.output_text || '') || {};
+  let detectParsed = safeJsonParse(detect.output_text || '') || {};
   const visibleItems = asStringArray(detectParsed.visible_items);
   const inferredItems = asStringArray(detectParsed.inferred_items);
   const staple = String(detectParsed.staple || 'unknown').toLowerCase();
+
+  if (visibleItems.length === 0) {
+    const retryDetect = await client.responses.create({
+      model: 'gpt-4.1-mini',
+      input: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: [
+                'Return strict JSON only.',
+                'Re-check the breakfast photo. List visible food items even if uncertain.',
+                'Output schema: {"visible_items":[],"inferred_items":[],"staple":"rice|bread|noodle|other|unknown","confidence":0-1}.',
+                'Never return empty visible_items unless image truly has no food.',
+                'If you can see white grains on a plate, staple should be "rice".'
+              ].join('\n')
+            },
+            {
+              type: 'input_image',
+              image_url: imagePayload
+            }
+          ]
+        }
+      ]
+    });
+    detectParsed = safeJsonParse(retryDetect.output_text || '') || detectParsed;
+  }
+
+  const visibleItemsFinal = asStringArray(detectParsed.visible_items);
+  const inferredItemsFinal = asStringArray(detectParsed.inferred_items);
+  const stapleFinal = String(detectParsed.staple || staple || 'unknown').toLowerCase();
 
   // Stage 2: generate recipe constrained by detected items.
   const recipeGen = await client.responses.create({
@@ -99,9 +145,9 @@ export async function generateRecipeFromImage({ imageUrl, city, country, city_zh
               'Return strict JSON only.',
               `City: ${city}, Country: ${country}`,
               `City zh-TW: ${city_zh}, Country zh-TW: ${country_zh}`,
-              `Visible items: ${JSON.stringify(visibleItems)}`,
-              `Inferred items: ${JSON.stringify(inferredItems)}`,
-              `Staple: ${staple}`,
+              `Visible items: ${JSON.stringify(visibleItemsFinal)}`,
+              `Inferred items: ${JSON.stringify(inferredItemsFinal)}`,
+              `Staple: ${stapleFinal}`,
               'Output schema: {"recipe":"...","recipe_zh":"..."}',
               'Both recipes must be single-serving.',
               'recipe: English with sections Ingredients, Steps, Total Time.',
@@ -118,11 +164,7 @@ export async function generateRecipeFromImage({ imageUrl, city, country, city_zh
   let parsed = safeJsonParse(recipeGen.output_text || '');
 
   // Hard guard for common failure mode: rice scene but bread recipe.
-  if (
-    parsed?.recipe &&
-    staple === 'rice' &&
-    /\b(bread|toast)\b/i.test(String(parsed.recipe))
-  ) {
+  if (parsed?.recipe && stapleFinal === 'rice' && /\b(bread|toast)\b/i.test(String(parsed.recipe))) {
     const retry = await client.responses.create({
       model: 'gpt-4.1-mini',
       input:
