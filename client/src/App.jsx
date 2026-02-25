@@ -94,4 +94,72 @@ export default function App() {
         <section className="panel result">
           <h2>Wake Up Result</h2>
           <div className="grid">
- 
+            <div>
+              <strong>User</strong>
+              <p>{result.record.userName}</p>
+            </div>
+            <div>
+              <strong>Recorded At</strong>
+              <p>
+                {result.record.recordedAtDate} {result.record.recordedAt} ({result.record.timezone})
+              </p>
+            </div>
+            <div>
+              <strong>City</strong>
+              <p>
+                {result.record.city} / {result.record.city_zh}
+              </p>
+            </div>
+            <div>
+              <strong>Country</strong>
+              <p>
+                {result.record.country} / {result.record.country_zh}
+              </p>
+            </div>
+            <div>
+              <strong>Coordinates</strong>
+              <p>
+                lat {result.record.latitude}, lng {result.record.longtitude}
+              </p>
+            </div>
+            <div>
+              <strong>Greeting</strong>
+              <p>{result.record.greeting}</p>
+            </div>
+          </div>
+
+          <div className="stories">
+            <article>
+              <h3>Story (EN)</h3>
+              <p>{result.record.story}</p>
+            </article>
+            <article>
+              <h3>Story (ZH)</h3>
+              <p>{result.record.story_zh}</p>
+            </article>
+          </div>
+
+          <div className="links">
+            <a href={result.drive?.viewUrl} target="_blank" rel="noreferrer">
+              Open Drive File
+            </a>
+            <a href={result.notion?.url} target="_blank" rel="noreferrer">
+              Open Notion Page
+            </a>
+          </div>
+
+          {result.record.imageUrl ? (
+            <img className="preview" src={result.record.imageUrl} alt="Generated breakfast" />
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="panel">
+        <h2>Skills Loaded</h2>
+        <ul>
+          {skills.length === 0 ? <li>(no skills found)</li> : skills.map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      </section>
+    </main>
+  );
+}

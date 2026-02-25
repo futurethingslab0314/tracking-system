@@ -18,3 +18,20 @@ export async function generateText(prompt) {
 
   return result.output_text || '';
 }
+
+export async function generateImage({ prompt, size = '1024x1024' }) {
+  const client = getClient();
+
+  const result = await client.images.generate({
+    model: env.openaiImageModel,
+    prompt,
+    size
+  });
+
+  const b64 = result?.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error('OpenAI image generation did not return base64 image data');
+  }
+
+  return Buffer.from(b64, 'base64');
+}
