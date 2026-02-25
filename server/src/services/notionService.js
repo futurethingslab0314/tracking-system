@@ -94,6 +94,7 @@ export async function writeWakeupRecordToNotion(record) {
     city_zh: richTextProperty(record.city_zh),
     country: richTextProperty(record.country),
     country_zh: richTextProperty(record.country_zh),
+    localTime: richTextProperty(record.localTime),
     latitude: numberProperty(record.latitude),
     longtitude: numberProperty(record.longtitude),
     greeting: richTextProperty(record.greeting),

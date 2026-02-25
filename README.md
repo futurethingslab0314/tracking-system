@@ -130,6 +130,7 @@ Response returns full record, Drive links, and Notion page info.
 - `city_zh` (rich_text)
 - `country` (rich_text)
 - `country_zh` (rich_text)
+- `localTime` (rich_text)
 - `latitude` (number)
 - `longtitude` (number)
 - `greeting` (rich_text)

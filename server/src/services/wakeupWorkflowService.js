@@ -276,6 +276,8 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
   const recordedAt = `${userLocal.hour}:${userLocal.minute}:${userLocal.second}`;
 
   const selected = nearest8amCity(now);
+  const cityLocal = toParts(now, selected.timezone);
+  const localTime = `${cityLocal.year}-${cityLocal.month}-${cityLocal.day} ${cityLocal.hour}:${cityLocal.minute}:${cityLocal.second}`;
 
   const greeting = await generateGreeting(selected);
   const { story, story_zh } = await generateStories(selected);
@@ -297,6 +299,7 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
     city_zh: selected.city_zh,
     country: selected.country,
     country_zh: selected.country_zh,
+    localTime,
     latitude: selected.latitude,
     longtitude: selected.longtitude,
     greeting,
