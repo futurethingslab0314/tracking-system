@@ -25,6 +25,12 @@ if (fs.existsSync(clientDistPath)) {
     }
     return res.sendFile(path.join(clientDistPath, 'index.html'));
   });
+} else {
+  app.get('/', (_req, res) => {
+    res.status(503).send(
+      'Client build not found (client/dist). Deploy should run `npm --workspace client run build` before starting server.'
+    );
+  });
 }
 
 app.use(errorHandler);
