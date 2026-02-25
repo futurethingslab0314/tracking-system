@@ -11,17 +11,40 @@ import { errorHandler } from './middleware/errorHandler.js';
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRootPath = path.resolve(__dirname, '../../..');
-const clientDistPath = path.resolve(__dirname, '../../../client/dist');
+
+function findClientDir() {
+  const candidates = [
+    path.resolve(__dirname, '../../../client'),
+    path.resolve(process.cwd(), '../client'),
+    path.resolve(process.cwd(), 'client')
+  ];
+
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'package.json'))) {
+      return dir;
+    }
+  }
+
+  return null;
+}
+
+const clientDir = findClientDir();
+const clientDistPath = clientDir ? path.join(clientDir, 'dist') : null;
 
 function ensureClientBuild() {
-  if (fs.existsSync(clientDistPath)) {
+  if (!clientDir) {
+    console.error('Client directory not found. Checked common candidate paths.');
+    return;
+  }
+
+  if (clientDistPath && fs.existsSync(clientDistPath)) {
     return;
   }
 
   console.log('client/dist not found. Attempting to build client automatically...');
-  const result = spawnSync('npm', ['--workspace', 'client', 'run', 'build'], {
-    cwd: repoRootPath,
+  // Build inside client directory to avoid workspace/root-dir dependency in cloud deploys.
+  const result = spawnSync('npm', ['run', 'build'], {
+    cwd: clientDir,
     stdio: 'inherit',
     shell: process.platform === 'win32'
   });
@@ -38,7 +61,7 @@ app.use(express.json());
 
 app.use('/api', router);
 
-if (fs.existsSync(clientDistPath)) {
+if (clientDistPath && fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) {
@@ -49,7 +72,7 @@ if (fs.existsSync(clientDistPath)) {
 } else {
   app.get('/', (_req, res) => {
     res.status(503).send(
-      'Client build not found (client/dist). Automatic build failed. Check deploy logs for npm client build errors.'
+      'Client build not found (client/dist). Automatic build failed or client directory not found. Check deploy logs.'
     );
   });
 }
