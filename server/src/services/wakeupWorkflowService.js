@@ -1,4 +1,4 @@
-import { generateImage, generateText } from './openaiService.js';
+import { generateImage, generateRecipeFromImage, generateText } from './openaiService.js';
 import { uploadImageToDrive } from './googleDriveService.js';
 import { writeWakeupRecordToNotion } from './notionService.js';
 
@@ -287,6 +287,8 @@ export function createWakeupDraft({ userName, clientTimeZone, clientIsoTime }) {
     greeting: GREETING_BY_LANGUAGE[selected.language] || 'Good morning',
     story: '',
     story_zh: '',
+    recipe: '',
+    recipe_zh: '',
     imageUrl: ''
   };
 
@@ -317,10 +319,27 @@ export async function completeWakeupDraft({ draft, onProgress }) {
 
   report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
 
+  const recipes = await generateRecipeFromImage({
+    imageUrl: drive.directUrl,
+    city: draft.selected.city,
+    country: draft.selected.country,
+    city_zh: draft.selected.city_zh,
+    country_zh: draft.selected.country_zh
+  });
+  report({
+    progress: 92,
+    message: 'Recipe generated. Writing to Notion...',
+    storyReady: true,
+    imageReady: true,
+    recipes
+  });
+
   const record = {
     ...draft.record,
     story: stories.story,
     story_zh: stories.story_zh,
+    recipe: recipes.recipe,
+    recipe_zh: recipes.recipe_zh,
     imageUrl: drive.directUrl
   };
 

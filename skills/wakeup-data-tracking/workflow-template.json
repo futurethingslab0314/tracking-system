@@ -7,6 +7,7 @@
     "generate-local-greeting",
     "generate-wakeup-story",
     "generate-breakfast-image",
+    "generate-one-person-recipe-from-image",
     "persist-to-notion"
   ],
   "notionProperties": {
@@ -22,6 +23,7 @@
     "greeting": "rich_text",
     "story": "rich_text",
     "story_zh": "rich_text",
+    "recipe": "rich_text",
     "Image URL": "url"
   }
 }

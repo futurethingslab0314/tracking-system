@@ -184,6 +184,12 @@ router.post('/wakeup/start', async (req, res, next) => {
                 story: update.stories.story,
                 story_zh: update.stories.story_zh
               }
+            : update.recipes
+            ? {
+                ...current.record,
+                recipe: update.recipes.recipe,
+                recipe_zh: update.recipes.recipe_zh
+              }
             : current.record,
           drive: update.drive || current.drive
         });

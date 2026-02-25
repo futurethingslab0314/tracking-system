@@ -100,6 +100,8 @@ export async function writeWakeupRecordToNotion(record) {
     greeting: richTextProperty(record.greeting),
     story: richTextProperty(record.story),
     story_zh: richTextProperty(record.story_zh),
+    recipe: richTextProperty(record.recipe),
+    recipe_zh: richTextProperty(record.recipe_zh),
     'Image URL': {
       url: record.imageUrl || null
     }

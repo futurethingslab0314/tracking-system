@@ -9,7 +9,8 @@
 3. `generate-local-greeting`
 4. `generate-wakeup-story`
 5. `generate-breakfast-image`
-6. `persist-to-notion`
+6. `generate-one-person-recipe-from-image`
+7. `persist-to-notion`
 
 ## Canonical Output Schema
 
@@ -28,6 +29,7 @@
   "greeting": "string",
   "story": "string",
   "story_zh": "string",
+  "recipe": "string",
   "imageUrl": "https://..."
 }
 ```
@@ -46,6 +48,7 @@
 - `greeting` -> Notion `greeting` (rich_text)
 - `story` -> Notion `story` (rich_text)
 - `story_zh` -> Notion `story_zh` (rich_text)
+- `recipe` -> Notion `recipe` (rich_text)
 - `imageUrl` -> Notion `Image URL` (url)
 
 ## Notes
