@@ -41,18 +41,30 @@ export async function uploadImageToDrive({ buffer, fileName = 'generated-image.p
 
   const drive = getDriveClient();
 
-  const created = await drive.files.create({
-    requestBody: {
-      name: fileName,
-      parents: [env.googleDriveFolderId],
-      mimeType
-    },
-    media: {
-      mimeType,
-      body: Readable.from(buffer)
-    },
-    fields: 'id,name,webViewLink,webContentLink'
-  });
+  let created;
+  try {
+    created = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [env.googleDriveFolderId],
+        mimeType
+      },
+      media: {
+        mimeType,
+        body: Readable.from(buffer)
+      },
+      fields: 'id,name,webViewLink,webContentLink',
+      supportsAllDrives: true
+    });
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (message.includes('Service Accounts do not have storage quota')) {
+      throw new Error(
+        'Google Drive upload failed: this folder is likely in My Drive. For Service Account, use a Shared Drive folder (or switch to OAuth user flow).'
+      );
+    }
+    throw error;
+  }
 
   const fileId = created?.data?.id;
   if (!fileId) {
@@ -64,7 +76,8 @@ export async function uploadImageToDrive({ buffer, fileName = 'generated-image.p
     requestBody: {
       type: 'anyone',
       role: 'reader'
-    }
+    },
+    supportsAllDrives: true
   });
 
   return {

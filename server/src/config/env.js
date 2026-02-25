@@ -10,14 +10,4 @@ export const env = {
   notionImageUrlProperty: process.env.NOTION_IMAGE_URL_PROPERTY || 'Image URL',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
-  googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || '',
-  googleServiceAccountKeyJson: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON || '',
-  googleServiceAccountKeyBase64: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 || ''
-};
-
-export function assertRequiredEnv(keys = []) {
-  const missing = keys.filter((key) => !process.env[key]);
-  if (missing.length > 0) {
-    throw new Error(`Missing environment variables: ${missing.join(', ')}`);
-  }
-}
+  g

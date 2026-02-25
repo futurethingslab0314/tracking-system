@@ -64,6 +64,9 @@ npm run dev:client
 - `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`（整段 JSON，private_key 保留 `\n`）
 
+Google Drive 注意事項：
+- 使用 Service Account 時，`GOOGLE_DRIVE_FOLDER_ID` 必須是 Shared Drive 裡的資料夾（My Drive 會出現 quota 錯誤）。
+
 可選前端環境變數：
 
 - `VITE_API_BASE_URL`（不填時，前端預設同網域呼叫 `/api`）
