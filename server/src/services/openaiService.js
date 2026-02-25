@@ -44,10 +44,18 @@ function safeJsonParse(text) {
   }
 }
 
+function asStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => String(item).trim()).filter(Boolean);
+}
+
 export async function generateRecipeFromImage({ imageUrl, city, country, city_zh, country_zh }) {
   const client = getClient();
 
-  const result = await client.responses.create({
+  // Stage 1: visual detection first (what is really visible vs inferred).
+  const detect = await client.responses.create({
     model: 'gpt-4.1-mini',
     input: [
       {
@@ -58,12 +66,10 @@ export async function generateRecipeFromImage({ imageUrl, city, country, city_zh
             text: [
               'Return strict JSON only.',
               `Image is a breakfast from ${city}, ${country}.`,
-              `City zh-TW: ${city_zh}`,
-              `Country zh-TW: ${country_zh}`,
-              'Output schema: {"recipe":"...","recipe_zh":"..."}',
-              'recipe: English single-serving recipe with sections Ingredients, Steps, Total Time.',
-              'recipe_zh: Traditional Chinese single-serving recipe with 食材/步驟/總時長.',
-              'If some ingredients are uncertain from image, mark them as inferred.'
+              'Identify visible food items and tableware only.',
+              'Output schema: {"visible_items":[],"inferred_items":[],"staple":"rice|bread|noodle|other|unknown","confidence":0-1}.',
+              'Do not guess bread/toast unless clearly visible.',
+              'If staple looks like white rice with meat/sauce, staple must be "rice".'
             ].join('\n')
           },
           {
@@ -75,7 +81,56 @@ export async function generateRecipeFromImage({ imageUrl, city, country, city_zh
     ]
   });
 
-  const parsed = safeJsonParse(result.output_text || '');
+  const detectParsed = safeJsonParse(detect.output_text || '') || {};
+  const visibleItems = asStringArray(detectParsed.visible_items);
+  const inferredItems = asStringArray(detectParsed.inferred_items);
+  const staple = String(detectParsed.staple || 'unknown').toLowerCase();
+
+  // Stage 2: generate recipe constrained by detected items.
+  const recipeGen = await client.responses.create({
+    model: 'gpt-4.1-mini',
+    input: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'input_text',
+            text: [
+              'Return strict JSON only.',
+              `City: ${city}, Country: ${country}`,
+              `City zh-TW: ${city_zh}, Country zh-TW: ${country_zh}`,
+              `Visible items: ${JSON.stringify(visibleItems)}`,
+              `Inferred items: ${JSON.stringify(inferredItems)}`,
+              `Staple: ${staple}`,
+              'Output schema: {"recipe":"...","recipe_zh":"..."}',
+              'Both recipes must be single-serving.',
+              'recipe: English with sections Ingredients, Steps, Total Time.',
+              'recipe_zh: Traditional Chinese with sections 食材、步驟、總時長.',
+              'Only use visible items as primary ingredients; inferred items are optional and must be marked as inferred.',
+              'If staple is rice, do not include bread/toast.'
+            ].join('\n')
+          }
+        ]
+      }
+    ]
+  });
+
+  let parsed = safeJsonParse(recipeGen.output_text || '');
+
+  // Hard guard for common failure mode: rice scene but bread recipe.
+  if (
+    parsed?.recipe &&
+    staple === 'rice' &&
+    /\b(bread|toast)\b/i.test(String(parsed.recipe))
+  ) {
+    const retry = await client.responses.create({
+      model: 'gpt-4.1-mini',
+      input:
+        'Return strict JSON only: {"recipe":"...","recipe_zh":"..."}\nFix previous result: staple is rice, so remove any bread/toast references and regenerate a one-person rice-based breakfast recipe in EN/ZH.'
+    });
+    parsed = safeJsonParse(retry.output_text || parsed);
+  }
+
   if (parsed?.recipe && parsed?.recipe_zh) {
     return {
       recipe: String(parsed.recipe).trim(),
