@@ -1,23 +1,28 @@
-# Skill: generate-one-person-recipe-from-image
+# Skill: generate-one-person-recipe
 
 ## Goal
-根據早餐圖片內容，生成一份「一人份」可執行食譜。
+根據城市與國家的早餐文化特色，先生成一份「一人份」可執行食譜，並輸出重點食材供後續圖片生成。
 
 ## Inputs
-- `imageUrl` (string)
 - `city` (string)
 - `country` (string)
+- `city_zh` (string)
+- `country_zh` (string)
+- `breakfastHint` (string)
 - `dietaryConstraints` (optional string)
 
 ## Outputs
+- `highlightIngredients` (array of string)
 - `recipe` (string, markdown/plain text)
+- `recipe_zh` (string, markdown/plain text)
+- `imagePrompt` (string)
 
 ## Prompt Template
-"Analyze the breakfast image at {imageUrl}. Infer plausible ingredients and produce one practical single-serving recipe inspired by {city}, {country}. Return concise cooking steps, estimated time, and ingredient quantities for one person."
+"Generate a practical single-serving breakfast recipe inspired by {city}, {country}. First list key local ingredients, then produce bilingual recipe (EN + ZH), and finally provide an image prompt that matches exactly the same ingredients and plating style."
 
 ## Rules
 - 僅輸出一人份（single serving）
-- 包含：食材與份量、步驟、總時長
+- 食譜包含：食材與份量、步驟、總時長
 - 不可要求稀有設備或難取得食材
-- 食材必須是圖片上有出現過的，不可以出現圖片上未出現過的食材
-- 若圖片資訊不足，需明確標示「推測」食材
+- `recipe` / `recipe_zh` 必須與 `highlightIngredients` 一致
+- `imagePrompt` 必須與食譜食材一致（避免圖文不一致）

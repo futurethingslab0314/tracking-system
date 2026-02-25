@@ -8,8 +8,8 @@
 2. `find-near-8am-city`
 3. `generate-local-greeting`
 4. `generate-wakeup-story`
-5. `generate-breakfast-image`
-6. `generate-one-person-recipe-from-image`
+5. `generate-one-person-recipe`
+6. `generate-breakfast-image`
 7. `persist-to-notion`
 
 ## Canonical Output Schema

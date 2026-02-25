@@ -6,8 +6,8 @@
     "find-near-8am-city",
     "generate-local-greeting",
     "generate-wakeup-story",
+    "generate-one-person-recipe",
     "generate-breakfast-image",
-    "generate-one-person-recipe-from-image",
     "persist-to-notion"
   ],
   "notionProperties": {
