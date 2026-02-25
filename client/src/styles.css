@@ -1,0 +1,67 @@
+:root {
+  font-family: "IBM Plex Sans", "Noto Sans TC", sans-serif;
+  color: #1b1f2a;
+  background: radial-gradient(circle at top left, #f0fff4, #eef6ff 40%, #ffffff 80%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+h1 {
+  margin-bottom: 8px;
+}
+
+.muted {
+  color: #5a6272;
+  margin-top: 0;
+}
+
+.card {
+  border: 1px solid #dde3ed;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 16px;
+  background: #ffffffcc;
+}
+
+textarea,
+input {
+  width: 100%;
+  border: 1px solid #ccd4e0;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  font: inherit;
+}
+
+button {
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #0f172a;
+  color: #fff;
+  cursor: pointer;
+}
+
+pre {
+  white-space: pre-wrap;
+  background: #f7f9fc;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.status {
+  margin-top: 20px;
+  color: #334155;
+}
