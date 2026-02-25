@@ -84,6 +84,8 @@ Google Drive 注意事項：
 - `POST /api/openai/generate`
 - `POST /api/workflow/generate-image-to-drive-notion`
 - `POST /api/wakeup/run`
+- `POST /api/wakeup/start`
+- `GET /api/wakeup/status/:jobId`
 - `GET /api/google/oauth/url`
 - `GET /api/google/oauth/callback`
 

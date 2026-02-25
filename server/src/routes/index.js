@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
 import { listSkills } from '../services/skillService.js';
 import { writeToNotionDatabase } from '../services/notionService.js';
 import { generateImage, generateText } from '../services/openaiService.js';
@@ -7,9 +8,10 @@ import {
   getGoogleOAuthConsentUrl,
   uploadImageToDrive
 } from '../services/googleDriveService.js';
-import { runWakeupWorkflow } from '../services/wakeupWorkflowService.js';
+import { completeWakeupDraft, createWakeupDraft, runWakeupWorkflow } from '../services/wakeupWorkflowService.js';
 
 const router = Router();
+const wakeupJobs = new Map();
 
 router.get('/health', (_req, res) => {
   res.json({ ok: true, service: 'agent-server' });
@@ -135,6 +137,112 @@ router.post('/wakeup/run', async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+router.post('/wakeup/start', async (req, res, next) => {
+  try {
+    const { userName, clientTimeZone, clientIsoTime } = req.body || {};
+
+    if (!userName || typeof userName !== 'string') {
+      return res.status(400).json({ ok: false, error: 'userName is required' });
+    }
+
+    const draft = createWakeupDraft({ userName, clientTimeZone, clientIsoTime });
+    const jobId = crypto.randomUUID();
+
+    wakeupJobs.set(jobId, {
+      id: jobId,
+      status: 'running',
+      progress: 20,
+      message: 'Basic wake-up profile ready.',
+      storyReady: false,
+      imageReady: false,
+      record: draft.record,
+      drive: null,
+      notion: null,
+      error: null,
+      createdAt: Date.now()
+    });
+
+    void completeWakeupDraft({
+      draft,
+      onProgress: (update) => {
+        const current = wakeupJobs.get(jobId);
+        if (!current) {
+          return;
+        }
+
+        wakeupJobs.set(jobId, {
+          ...current,
+          progress: update.progress ?? current.progress,
+          message: update.message ?? current.message,
+          storyReady: update.storyReady ?? current.storyReady,
+          imageReady: update.imageReady ?? current.imageReady,
+          record: update.stories
+            ? {
+                ...current.record,
+                story: update.stories.story,
+                story_zh: update.stories.story_zh
+              }
+            : current.record,
+          drive: update.drive || current.drive
+        });
+      }
+    })
+      .then((finalData) => {
+        const current = wakeupJobs.get(jobId);
+        if (!current) {
+          return;
+        }
+        wakeupJobs.set(jobId, {
+          ...current,
+          status: 'completed',
+          progress: 100,
+          message: 'Completed and synced to Notion.',
+          storyReady: true,
+          imageReady: true,
+          record: finalData.record,
+          drive: finalData.drive,
+          notion: finalData.notion
+        });
+      })
+      .catch((error) => {
+        const current = wakeupJobs.get(jobId);
+        if (!current) {
+          return;
+        }
+        wakeupJobs.set(jobId, {
+          ...current,
+          status: 'failed',
+          message: 'Generation failed',
+          error: error.message || 'Unknown error'
+        });
+      });
+
+    return res.json({
+      ok: true,
+      data: {
+        jobId,
+        status: 'running',
+        progress: 20,
+        message: 'Basic wake-up profile ready.',
+        record: draft.record,
+        storyReady: false,
+        imageReady: false
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/wakeup/status/:jobId', (req, res) => {
+  const job = wakeupJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ ok: false, error: 'job not found' });
+  }
+
+  return res.json({ ok: true, data: job });
 });
 
 export default router;

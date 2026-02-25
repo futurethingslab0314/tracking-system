@@ -16,6 +16,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('Idle');
+  const [jobId, setJobId] = useState('');
+  const [storyReady, setStoryReady] = useState(false);
+  const [imageReady, setImageReady] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [result, setResult] = useState(null);
 
@@ -28,6 +31,54 @@ export default function App() {
 
   const userZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
+  useEffect(() => {
+    if (!jobId) {
+      return undefined;
+    }
+
+    const poll = window.setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/wakeup/status/${jobId}`);
+        const data = await res.json();
+        if (!res.ok) {
+          setStatus(`Error: ${data.error || 'Unknown error'}`);
+          setLoading(false);
+          setJobId('');
+          return;
+        }
+
+        const job = data.data;
+        setProgress(job.progress || 0);
+        setProgressLabel(job.message || 'Processing...');
+        setStoryReady(Boolean(job.storyReady));
+        setImageReady(Boolean(job.imageReady));
+        setResult({
+          record: job.record,
+          drive: job.drive,
+          notion: job.notion
+        });
+
+        if (job.status === 'completed') {
+          setStatus('Completed and synced to Notion.');
+          setLoading(false);
+          setJobId('');
+        }
+
+        if (job.status === 'failed') {
+          setStatus(`Error: ${job.error || 'Generation failed'}`);
+          setLoading(false);
+          setJobId('');
+        }
+      } catch (error) {
+        setStatus(`Error: ${error.message}`);
+        setLoading(false);
+        setJobId('');
+      }
+    }, 1200);
+
+    return () => window.clearInterval(poll);
+  }, [jobId]);
+
   async function handleWakeUp() {
     if (!userName.trim()) {
       setStatus('Please input user name.');
@@ -36,17 +87,15 @@ export default function App() {
 
     setLoading(true);
     setProgress(6);
-    setProgressLabel('Preparing wake-up workflow...');
+    setProgressLabel('Preparing wake-up profile...');
+    setStoryReady(false);
+    setImageReady(false);
     setStatus('Running wake-up workflow...');
 
     const time = localTimeSnapshot();
-    const ticker = window.setInterval(() => {
-      setProgress((prev) => Math.min(prev + Math.max(1, (95 - prev) * 0.08), 95));
-    }, 350);
 
     try {
-      setProgressLabel('Generating story and image...');
-      const res = await fetch(`${API_BASE}/api/wakeup/run`, {
+      const res = await fetch(`${API_BASE}/api/wakeup/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -61,21 +110,18 @@ export default function App() {
       if (!res.ok) {
         setStatus(`Error: ${data.error || 'Unknown error'}`);
         setProgressLabel('Generation failed');
-        window.clearInterval(ticker);
         setLoading(false);
         return;
       }
 
-      setResult(data.data);
-      setProgress(100);
-      setProgressLabel('Done');
-      setStatus('Completed and synced to Notion.');
-      window.clearInterval(ticker);
+      setProgress(data.data?.progress || 20);
+      setProgressLabel(data.data?.message || 'Generating story and image...');
+      setResult({ record: data.data?.record, drive: null, notion: null });
+      setJobId(data.data?.jobId || '');
+      setStatus('Basic profile ready. Generating story and breakfast...');
     } catch (error) {
       setStatus(`Error: ${error.message}`);
       setProgressLabel('Generation failed');
-      window.clearInterval(ticker);
-    } finally {
       setLoading(false);
     }
   }
@@ -157,11 +203,11 @@ export default function App() {
           <div className="stories">
             <article>
               <h3>Story (EN)</h3>
-              <p>{result.record.story}</p>
+              <p>{storyReady ? result.record.story : 'Generating story...'}</p>
             </article>
             <article>
               <h3>Story (ZH)</h3>
-              <p>{result.record.story_zh}</p>
+              <p>{storyReady ? result.record.story_zh : '故事生成中...'}</p>
             </article>
           </div>
 
@@ -174,9 +220,11 @@ export default function App() {
             </a>
           </div>
 
-          {result.record.imageUrl ? (
+          {imageReady && result.record.imageUrl ? (
             <img className="preview" src={result.record.imageUrl} alt="Generated breakfast" />
-          ) : null}
+          ) : (
+            <div className="imageLoading">Breakfast image generating...</div>
+          )}
         </section>
       ) : null}
 

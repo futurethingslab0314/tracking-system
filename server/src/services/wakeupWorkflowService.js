@@ -4,6 +4,19 @@ import { writeWakeupRecordToNotion } from './notionService.js';
 
 const TARGET_MINUTE = 8 * 60;
 
+const GREETING_BY_LANGUAGE = {
+  Japanese: 'おはようございます',
+  Korean: '좋은 아침입니다',
+  Thai: 'สวัสดีตอนเช้า',
+  Turkish: 'Gunaydin',
+  Swahili: 'Habari za asubuhi',
+  French: 'Bonjour',
+  Portuguese: 'Bom dia',
+  Icelandic: 'Godan daginn',
+  Spanish: 'Buenos dias',
+  English: 'Good morning'
+};
+
 const CITIES = [
   {
     city: 'Tokyo',
@@ -196,7 +209,7 @@ function safeJsonParse(text) {
   }
 }
 
-async function generateNarrativePack({ city, country, city_zh, country_zh, language }) {
+async function generateStories({ city, country, city_zh, country_zh }) {
   const response = await generateText(
     [
       'Return strict JSON only. No markdown.',
@@ -204,9 +217,7 @@ async function generateNarrativePack({ city, country, city_zh, country_zh, langu
       `Country: ${country}`,
       `City zh-TW: ${city_zh}`,
       `Country zh-TW: ${country_zh}`,
-      `Primary language: ${language}`,
-      'Output schema: {"greeting":"...","story":"...","story_zh":"..."}',
-      'greeting requirements: one short natural phrase meaning good morning in the local language.',
+      'Output schema: {"story":"...","story_zh":"..."}',
       'story requirements: English, <=150 words, start with "Today you wake up in {city}, {country}."',
       'story_zh requirements: Traditional Chinese, <=150 characters, start with "今天的你甦醒在{country_zh}的{city_zh}，"',
       'Both should include cultural routine, geography, and one less-known historical detail.'
@@ -214,16 +225,14 @@ async function generateNarrativePack({ city, country, city_zh, country_zh, langu
   );
 
   const parsed = safeJsonParse(response);
-  if (parsed?.greeting && parsed?.story && parsed?.story_zh) {
+  if (parsed?.story && parsed?.story_zh) {
     return {
-      greeting: String(parsed.greeting).trim(),
       story: String(parsed.story).trim(),
       story_zh: String(parsed.story_zh).trim()
     };
   }
 
   return {
-    greeting: 'Good morning',
     story: `Today you wake up in ${city}, ${country}. Dawn slides over the streets as local breakfast aromas drift from corner cafes. You follow a narrow lane toward a hill viewpoint and hear snippets of old stories about how this city once rebuilt itself after a forgotten fire. The morning feels like a map opening in your hands, and each step gives you one more clue about how people here learned to live with their land and seasons.`,
     story_zh: `今天的你甦醒在${country_zh}的${city_zh}，清晨的光沿著街道慢慢展開，你聞到在地早餐香氣，邊走邊聽見一段少有人提起的城市往事。地形與氣候塑造了居民的生活節奏，你像在翻開一張冒險地圖。`
   };
@@ -247,7 +256,7 @@ function normalizeClientNow({ clientIsoTime }) {
   return parsed;
 }
 
-export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTime }) {
+export function createWakeupDraft({ userName, clientTimeZone, clientIsoTime }) {
   if (!userName || typeof userName !== 'string' || !userName.trim()) {
     throw new Error('userName is required');
   }
@@ -263,17 +272,6 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
   const cityLocal = toParts(now, selected.timezone);
   const localTime = `${cityLocal.year}-${cityLocal.month}-${cityLocal.day} ${cityLocal.hour}:${cityLocal.minute}:${cityLocal.second}`;
 
-  const imagePrompt = buildImagePrompt(selected);
-  const [narrative, image] = await Promise.all([
-    generateNarrativePack(selected),
-    generateImage({ prompt: imagePrompt, size: 'auto' })
-  ]);
-  const drive = await uploadImageToDrive({
-    buffer: image,
-    fileName: `wake-up-${selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
-    mimeType: 'image/png'
-  });
-
   const record = {
     userName: userName.trim(),
     recordedAtDate,
@@ -286,17 +284,58 @@ export async function runWakeupWorkflow({ userName, clientTimeZone, clientIsoTim
     localTime,
     latitude: selected.latitude,
     longtitude: selected.longtitude,
-    greeting: narrative.greeting,
-    story: narrative.story,
-    story_zh: narrative.story_zh,
+    greeting: GREETING_BY_LANGUAGE[selected.language] || 'Good morning',
+    story: '',
+    story_zh: '',
+    imageUrl: ''
+  };
+
+  return { record, selected };
+}
+
+export async function completeWakeupDraft({ draft, onProgress }) {
+  const report = (payload) => {
+    if (typeof onProgress === 'function') {
+      onProgress(payload);
+    }
+  };
+
+  report({ progress: 40, message: 'Generating story and breakfast image...', storyReady: false, imageReady: false });
+
+  const storyPromise = generateStories(draft.selected);
+  const imagePromise = generateImage({ prompt: buildImagePrompt(draft.selected), size: 'auto' });
+
+  const stories = await storyPromise;
+  report({ progress: 62, message: 'Story generated. Uploading image...', storyReady: true, imageReady: false, stories });
+
+  const image = await imagePromise;
+  const drive = await uploadImageToDrive({
+    buffer: image,
+    fileName: `wake-up-${draft.selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
+    mimeType: 'image/png'
+  });
+
+  report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
+
+  const record = {
+    ...draft.record,
+    story: stories.story,
+    story_zh: stories.story_zh,
     imageUrl: drive.directUrl
   };
 
   const notion = await writeWakeupRecordToNotion(record);
+
+  report({ progress: 100, message: 'Completed and synced to Notion.', storyReady: true, imageReady: true });
 
   return {
     record,
     drive,
     notion
   };
+}
+
+export async function runWakeupWorkflow(input) {
+  const draft = createWakeupDraft(input);
+  return completeWakeupDraft({ draft });
 }
