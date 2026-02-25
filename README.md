@@ -44,9 +44,15 @@ npm run dev:server
 npm run dev:client
 ```
 
-## Railway 設定
+## Railway 設定（單一服務）
 
-在 `agent-server` 設定：
+此專案可用「一個 Railway service」從 repo root 直接部署：
+
+- install: `npm install --workspaces --include-workspace-root`
+- build: `npm --workspace client run build`
+- start: `npm --workspace server run start`
+
+環境變數請設在同一個 service：
 
 - `PORT`
 - `NOTION_API_KEY`
@@ -58,9 +64,9 @@ npm run dev:client
 - `GOOGLE_DRIVE_FOLDER_ID`
 - `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`（整段 JSON，private_key 保留 `\n`）
 
-在 `agent-client` 設定：
+可選前端環境變數：
 
-- `VITE_API_BASE_URL=https://<your-agent-server-url>`
+- `VITE_API_BASE_URL`（不填時，前端預設同網域呼叫 `/api`）
 
 ## API
 

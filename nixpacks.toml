@@ -4,5 +4,8 @@ nixPkgs = ['nodejs_20']
 [phases.install]
 cmds = ['npm install --workspaces --include-workspace-root']
 
+[phases.build]
+cmds = ['npm --workspace client run build']
+
 [start]
 cmd = 'npm --workspace server run start'
