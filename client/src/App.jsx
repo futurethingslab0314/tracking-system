@@ -211,6 +211,17 @@ export default function App() {
             </article>
           </div>
 
+          <div className="stories">
+            <article>
+              <h3>Recipe (EN)</h3>
+              <p>{result.record.recipe ? result.record.recipe : 'Generating recipe...'}</p>
+            </article>
+            <article>
+              <h3>Recipe (ZH)</h3>
+              <p>{result.record.recipe_zh ? result.record.recipe_zh : '食譜生成中...'}</p>
+            </article>
+          </div>
+
           <div className="links">
             <a href={result.drive?.viewUrl} target="_blank" rel="noreferrer">
               Open Drive File

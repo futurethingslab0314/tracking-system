@@ -3,6 +3,8 @@ import { uploadImageToDrive } from './googleDriveService.js';
 import { writeWakeupRecordToNotion } from './notionService.js';
 
 const TARGET_MINUTE = 8 * 60;
+const IMAGE_CACHE_TTL_MS = 1000 * 60 * 60 * 24;
+const BREAKFAST_IMAGE_CACHE = new Map();
 
 const GREETING_BY_LANGUAGE = {
   Japanese: 'おはようございます',
@@ -256,6 +258,30 @@ function normalizeClientNow({ clientIsoTime }) {
   return parsed;
 }
 
+function buildImageCacheKey({ city, country }) {
+  return `${country}|${city}`.toLowerCase().trim();
+}
+
+function getCachedBreakfastImage(selected) {
+  const key = buildImageCacheKey(selected);
+  const cached = BREAKFAST_IMAGE_CACHE.get(key);
+  if (!cached) {
+    return null;
+  }
+
+  if (Date.now() - cached.createdAt > IMAGE_CACHE_TTL_MS) {
+    BREAKFAST_IMAGE_CACHE.delete(key);
+    return null;
+  }
+
+  return cached.drive;
+}
+
+function setCachedBreakfastImage(selected, drive) {
+  const key = buildImageCacheKey(selected);
+  BREAKFAST_IMAGE_CACHE.set(key, { drive, createdAt: Date.now() });
+}
+
 export function createWakeupDraft({ userName, clientTimeZone, clientIsoTime }) {
   if (!userName || typeof userName !== 'string' || !userName.trim()) {
     throw new Error('userName is required');
@@ -305,19 +331,36 @@ export async function completeWakeupDraft({ draft, onProgress }) {
   report({ progress: 40, message: 'Generating story and breakfast image...', storyReady: false, imageReady: false });
 
   const storyPromise = generateStories(draft.selected);
-  const imagePromise = generateImage({ prompt: buildImagePrompt(draft.selected), size: 'auto' });
+  const cachedDrive = getCachedBreakfastImage(draft.selected);
+  const imagePromise = cachedDrive
+    ? null
+    : generateImage({ prompt: buildImagePrompt(draft.selected), size: 'auto' });
 
   const stories = await storyPromise;
-  report({ progress: 62, message: 'Story generated. Uploading image...', storyReady: true, imageReady: false, stories });
+  report({ progress: 62, message: 'Story generated. Preparing image...', storyReady: true, imageReady: false, stories });
 
-  const image = await imagePromise;
-  const drive = await uploadImageToDrive({
-    buffer: image,
-    fileName: `wake-up-${draft.selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
-    mimeType: 'image/png'
-  });
-
-  report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
+  let drive = cachedDrive;
+  if (drive) {
+    report({
+      progress: 80,
+      message: 'Reused similar breakfast image from cache.',
+      storyReady: true,
+      imageReady: true,
+      drive
+    });
+  } else {
+    const image = await imagePromise;
+    drive = await uploadImageToDrive({
+      buffer: image,
+      fileName: `wake-up-${draft.selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
+      mimeType: 'image/png'
+    });
+    setCachedBreakfastImage(draft.selected, drive);
+    report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
+  }
+  if (cachedDrive) {
+    report({ progress: 84, message: 'Using cached image. Writing to Notion...', storyReady: true, imageReady: true, drive });
+  }
 
   const recipes = await generateRecipeFromImage({
     imageUrl: drive.directUrl,
