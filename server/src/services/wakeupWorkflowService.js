@@ -1,4 +1,4 @@
-import { generateImage, generateRecipeFromImage, generateText } from './openaiService.js';
+import { generateImage, generateText } from './openaiService.js';
 import { uploadImageToDrive } from './googleDriveService.js';
 import { writeWakeupRecordToNotion } from './notionService.js';
 
@@ -240,14 +240,49 @@ async function generateStories({ city, country, city_zh, country_zh }) {
   };
 }
 
-function buildImagePrompt({ city, country, breakfastHint }) {
-  return [
-    `Top-down photo of a single-person breakfast set inspired by authentic ${city}, ${country} food culture.`,
-    `Include: ${breakfastHint}.`,
-    'Only food, utensils, ceramic tableware, and tabletop texture.',
-    'No people, no hands, no text, no logo, no watermark.',
-    'Natural morning light, realistic details, editorial food photography.'
-  ].join(' ');
+async function generateRecipePackFromLocation({ city, country, city_zh, country_zh, breakfastHint }) {
+  const response = await generateText(
+    [
+      'Return strict JSON only. No markdown.',
+      `City: ${city}`,
+      `Country: ${country}`,
+      `City zh-TW: ${city_zh}`,
+      `Country zh-TW: ${country_zh}`,
+      `Local breakfast hint: ${breakfastHint}`,
+      'Output schema: {"highlight_ingredients":[],"recipe":"...","recipe_zh":"...","image_prompt":"..."}',
+      'highlight_ingredients: array of 4-8 concise ingredient phrases for one-person breakfast.',
+      'recipe: English single-serving recipe with sections Ingredients, Steps, Total Time.',
+      'recipe_zh: Traditional Chinese single-serving recipe with sections 食材、步驟、總時長.',
+      'image_prompt: top-view breakfast prompt matching highlight_ingredients and recipe. No people, no text, no logos.'
+    ].join('\n')
+  );
+
+  const parsed = safeJsonParse(response);
+  if (parsed?.recipe && parsed?.recipe_zh && parsed?.image_prompt) {
+    return {
+      highlightIngredients: Array.isArray(parsed.highlight_ingredients)
+        ? parsed.highlight_ingredients.map((item) => String(item).trim()).filter(Boolean)
+        : [],
+      recipe: String(parsed.recipe).trim(),
+      recipe_zh: String(parsed.recipe_zh).trim(),
+      imagePrompt: String(parsed.image_prompt).trim()
+    };
+  }
+
+  return {
+    highlightIngredients: breakfastHint.split(',').map((item) => item.trim()).filter(Boolean),
+    recipe:
+      `Ingredients (1 serving): ${breakfastHint}. Steps: Prepare the key ingredients in simple breakfast portions and plate in a balanced one-person serving. Total Time: 15-20 minutes.`,
+    recipe_zh:
+      `食材（一人份）：${breakfastHint}。步驟：依在地早餐習慣完成主要食材並擺盤成一人份。總時長：約15-20分鐘。`,
+    imagePrompt: [
+      `Top-down photo of a single-person breakfast set inspired by authentic ${city}, ${country} food culture.`,
+      `Include: ${breakfastHint}.`,
+      'Only food, utensils, ceramic tableware, and tabletop texture.',
+      'No people, no hands, no text, no logo, no watermark.',
+      'Natural morning light, realistic details, editorial food photography.'
+    ].join(' ')
+  };
 }
 
 function normalizeClientNow({ clientIsoTime }) {
@@ -328,19 +363,32 @@ export async function completeWakeupDraft({ draft, onProgress }) {
     }
   };
 
-  report({ progress: 40, message: 'Generating story and breakfast image...', storyReady: false, imageReady: false });
+  report({ progress: 40, message: 'Generating story and recipe...', storyReady: false, imageReady: false });
 
-  const storyPromise = generateStories(draft.selected);
+  const [stories, recipePack] = await Promise.all([
+    generateStories(draft.selected),
+    generateRecipePackFromLocation(draft.selected)
+  ]);
+
+  report({
+    progress: 62,
+    message: 'Story and recipe generated. Preparing image...',
+    storyReady: true,
+    imageReady: false,
+    stories,
+    recipes: { recipe: recipePack.recipe, recipe_zh: recipePack.recipe_zh }
+  });
+
   const cached = getCachedBreakfastImage(draft.selected);
   const imagePromise = cached?.drive
     ? null
-    : generateImage({ prompt: buildImagePrompt(draft.selected), size: 'auto' });
-
-  const stories = await storyPromise;
-  report({ progress: 62, message: 'Story generated. Preparing image...', storyReady: true, imageReady: false, stories });
+    : generateImage({ prompt: recipePack.imagePrompt, size: 'auto' });
 
   let drive = cached?.drive || null;
-  let recipes = cached?.recipes || null;
+  let recipes = {
+    recipe: recipePack.recipe,
+    recipe_zh: recipePack.recipe_zh
+  };
   if (drive) {
     report({
       progress: 80,
@@ -356,33 +404,16 @@ export async function completeWakeupDraft({ draft, onProgress }) {
       fileName: `wake-up-${draft.selected.city.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.png`,
       mimeType: 'image/png'
     });
-    recipes = await generateRecipeFromImage({
-      imageBase64: image.toString('base64'),
-      city: draft.selected.city,
-      country: draft.selected.country,
-      city_zh: draft.selected.city_zh,
-      country_zh: draft.selected.country_zh
-    });
-    setCachedBreakfastImage(draft.selected, { drive, recipes });
+    setCachedBreakfastImage(draft.selected, { drive, recipes, imagePrompt: recipePack.imagePrompt });
     report({ progress: 84, message: 'Image uploaded. Writing to Notion...', storyReady: true, imageReady: true, drive });
   }
   if (cached?.drive) {
     report({ progress: 84, message: 'Using cached image. Writing to Notion...', storyReady: true, imageReady: true, drive });
   }
 
-  if (!recipes) {
-    recipes = await generateRecipeFromImage({
-      imageUrl: drive.directUrl,
-      city: draft.selected.city,
-      country: draft.selected.country,
-      city_zh: draft.selected.city_zh,
-      country_zh: draft.selected.country_zh
-    });
-    setCachedBreakfastImage(draft.selected, { drive, recipes });
-  }
   report({
     progress: 92,
-    message: 'Recipe generated. Writing to Notion...',
+    message: 'Writing to Notion...',
     storyReady: true,
     imageReady: true,
     recipes
