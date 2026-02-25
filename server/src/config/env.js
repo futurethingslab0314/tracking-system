@@ -11,6 +11,10 @@ export const env = {
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiImageModel: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1',
   googleDriveFolderId: process.env.GOOGLE_DRIVE_FOLDER_ID || '',
+  googleOauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+  googleOauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+  googleOauthRedirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI || '',
+  googleOauthRefreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
   googleServiceAccountKeyJson: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON || '',
   googleServiceAccountKeyBase64: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 || ''
 };

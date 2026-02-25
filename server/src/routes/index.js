@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { listSkills } from '../services/skillService.js';
 import { writeToNotionDatabase } from '../services/notionService.js';
 import { generateImage, generateText } from '../services/openaiService.js';
-import { uploadImageToDrive } from '../services/googleDriveService.js';
+import {
+  exchangeGoogleOAuthCode,
+  getGoogleOAuthConsentUrl,
+  uploadImageToDrive
+} from '../services/googleDriveService.js';
 import { runWakeupWorkflow } from '../services/wakeupWorkflowService.js';
 
 const router = Router();
@@ -17,6 +21,35 @@ router.get('/skills', async (_req, res, next) => {
     res.json({ skills });
   } catch (error) {
     next(error);
+  }
+});
+
+router.get('/google/oauth/url', (req, res, next) => {
+  try {
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const url = getGoogleOAuthConsentUrl({ state });
+    res.json({ ok: true, url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/google/oauth/callback', async (req, res, next) => {
+  try {
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    if (!code) {
+      return res.status(400).json({ ok: false, error: 'code is required' });
+    }
+
+    const tokens = await exchangeGoogleOAuthCode(code);
+    return res.json({
+      ok: true,
+      message:
+        'OAuth code exchanged. Save refreshToken to GOOGLE_OAUTH_REFRESH_TOKEN in Railway (if present).',
+      tokens
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 

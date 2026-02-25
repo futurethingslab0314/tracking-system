@@ -2,6 +2,26 @@ import { Readable } from 'node:stream';
 import { google } from 'googleapis';
 import { env } from '../config/env.js';
 
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive';
+
+function getOAuthClient() {
+  if (!env.googleOauthClientId || !env.googleOauthClientSecret || !env.googleOauthRedirectUri) {
+    throw new Error(
+      'Google OAuth is not fully configured. Missing GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REDIRECT_URI.'
+    );
+  }
+
+  return new google.auth.OAuth2(
+    env.googleOauthClientId,
+    env.googleOauthClientSecret,
+    env.googleOauthRedirectUri
+  );
+}
+
+function hasOAuthRefreshToken() {
+  return Boolean(env.googleOauthRefreshToken);
+}
+
 function parseServiceAccountCredentials() {
   if (env.googleServiceAccountKeyJson) {
     const creds = JSON.parse(env.googleServiceAccountKeyJson);
@@ -19,7 +39,7 @@ function parseServiceAccountCredentials() {
   throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY_JSON or GOOGLE_SERVICE_ACCOUNT_KEY_BASE64 is not configured');
 }
 
-function getDriveClient() {
+function getDriveClientWithServiceAccount() {
   const credentials = parseServiceAccountCredentials();
 
   if (!credentials.client_email || !credentials.private_key) {
@@ -28,10 +48,48 @@ function getDriveClient() {
 
   const auth = new google.auth.GoogleAuth({
     credentials,
-    scopes: ['https://www.googleapis.com/auth/drive']
+    scopes: [DRIVE_SCOPE]
   });
 
   return google.drive({ version: 'v3', auth });
+}
+
+function getDriveClientWithOAuthRefreshToken() {
+  const oauth = getOAuthClient();
+  oauth.setCredentials({ refresh_token: env.googleOauthRefreshToken });
+  return google.drive({ version: 'v3', auth: oauth });
+}
+
+function getDriveClient() {
+  if (hasOAuthRefreshToken()) {
+    return getDriveClientWithOAuthRefreshToken();
+  }
+  return getDriveClientWithServiceAccount();
+}
+
+export function getGoogleOAuthConsentUrl({ state = '' } = {}) {
+  const oauth = getOAuthClient();
+  return oauth.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: [DRIVE_SCOPE],
+    state
+  });
+}
+
+export async function exchangeGoogleOAuthCode(code) {
+  if (!code) {
+    throw new Error('code is required');
+  }
+
+  const oauth = getOAuthClient();
+  const { tokens } = await oauth.getToken(code);
+  return {
+    accessToken: tokens.access_token || '',
+    refreshToken: tokens.refresh_token || '',
+    expiryDate: tokens.expiry_date || null,
+    scope: tokens.scope || ''
+  };
 }
 
 export async function uploadImageToDrive({ buffer, fileName = 'generated-image.png', mimeType = 'image/png' }) {
@@ -62,6 +120,9 @@ export async function uploadImageToDrive({ buffer, fileName = 'generated-image.p
       throw new Error(
         'Google Drive upload failed: this folder is likely in My Drive. For Service Account, use a Shared Drive folder (or switch to OAuth user flow).'
       );
+    }
+    if (message.includes('invalid_grant') || message.includes('invalid_client')) {
+      throw new Error('Google OAuth upload failed: invalid OAuth credentials or refresh token.');
     }
     throw error;
   }

@@ -62,10 +62,15 @@ npm run dev:client
 - `OPENAI_API_KEY`
 - `OPENAI_IMAGE_MODEL`（預設 `gpt-image-1`）
 - `GOOGLE_DRIVE_FOLDER_ID`
+- `GOOGLE_OAUTH_CLIENT_ID`
+- `GOOGLE_OAUTH_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_REFRESH_TOKEN`
 - `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`（整段 JSON，private_key 保留 `\n`）
 
 Google Drive 注意事項：
 - 使用 Service Account 時，`GOOGLE_DRIVE_FOLDER_ID` 必須是 Shared Drive 裡的資料夾（My Drive 會出現 quota 錯誤）。
+- 使用個人 Google Drive（My Drive）時，請改用 OAuth refresh token（上面 4 個 `GOOGLE_OAUTH_*` 變數）。
 
 可選前端環境變數：
 
@@ -79,6 +84,16 @@ Google Drive 注意事項：
 - `POST /api/openai/generate`
 - `POST /api/workflow/generate-image-to-drive-notion`
 - `POST /api/wakeup/run`
+- `GET /api/google/oauth/url`
+- `GET /api/google/oauth/callback`
+
+### Google OAuth (Personal Drive) 快速流程
+
+1. 設定以下 env：`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`, `GOOGLE_DRIVE_FOLDER_ID`
+2. 開啟：`GET /api/google/oauth/url`，取得 `url`
+3. 用瀏覽器打開該 `url` 完成授權，Google 會導回 `GOOGLE_OAUTH_REDIRECT_URI`
+4. callback API 回傳 `tokens.refreshToken`，把它存到 `GOOGLE_OAUTH_REFRESH_TOKEN`
+5. redeploy 後即可上傳到個人 My Drive folder
 
 ### Wake Up Workflow API
 
