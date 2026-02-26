@@ -23,6 +23,6 @@
 ## Rules
 - 僅輸出一人份（single serving）
 - 食譜包含：食材與份量、步驟、總時長
-- 不可要求稀有設備或難取得食材
+- 食材內容可以反映當地飲食文化
 - `recipe` / `recipe_zh` 必須與 `highlightIngredients` 一致
 - `imagePrompt` 必須與食譜食材一致（避免圖文不一致）
